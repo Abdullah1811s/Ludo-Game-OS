@@ -1,3 +1,39 @@
+/* General styling for buttons and labels */
+button {
+    font-size: 16px;
+    font-weight: bold;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+}
+
+/* Styling for the "Roll Dice" button */
+.roll-dice-button {
+    background-color: #8c00b3; /* Green background */
+    color: white;
+ 
+    padding: 12px 30px;
+    font-size: 18px;
+    font-weight: bold;
+    border-radius: 12px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+   
+}
+
+
+
+/* Styling for the dice result label */
+.dice-result-label {
+    font-size: 24px;
+    font-weight: bold;
+    color: #333;
+  
+    padding: 15px;
+    background-color: #f4f4f4;
+    border-radius: 8px;
+    margin-top: 10px;
+}
+
+/* Styling for the top-left cell */
 .top-left {
     background-color: #0db0f6;
     color: white;
@@ -7,16 +43,20 @@
     border-radius: 0;
     padding: 10px 20px;
 }
+
+/* Styling for the blue token cell */
 .blue {
     background-color: #0db0f6;
     color: white;
     border: 2px solid #0db0f6;
     background-image: none;
     box-shadow: none;
-    border-radius: 0;
+    border-radius: 50%;
     padding: 10px 20px;
     margin: 5px;
 }
+
+/* Styling for the bottom-left cell */
 .bottom-left {
     background-color: #d9584a;
     color: white;
@@ -26,16 +66,20 @@
     border-radius: 0;
     padding: 10px 20px;
 }
+
+/* Styling for the red token cell */
 .red {
     background-color: #d9584a;
     color: white;
     border: 2px solid #d9584a;
     background-image: none;
     box-shadow: none;
-    border-radius: 0;
+    border-radius: 50%;
     padding: 10px 20px;
     margin: 5px;
 }
+
+/* Styling for the bottom-right cell */
 .bottom-right {
     background-color: #54fc42;
     color: white;
@@ -45,16 +89,20 @@
     border-radius: 0;
     padding: 10px 20px;
 }
+
+/* Styling for the green token cell */
 .green {
     background-color: #54fc42;
     color: white;
     border: 2px solid #54fc42;
     background-image: none;
     box-shadow: none;
-    border-radius: 0;
+    border-radius: 50%;
     padding: 10px 20px;
     margin: 5px;
 }
+
+/* Styling for the top-right cell */
 .top-right {
     background-color: #e0e93b;
     color: white;
@@ -65,29 +113,39 @@
     padding: 10px 20px;
 }
 
+/* Styling for the yellow token cell */
 .yellow {
     background-color: #e0e93b;
     color: white;
     border: 2px solid #e0e93b;
     background-image: none;
     box-shadow: none;
-    border-radius: 0;
+    border-radius: 50%;
     padding: 10px 20px;
     margin: 5px;
 }
 
+/* Transparent inner grid cell */
 .transparent-inner {
     background-color: transparent;
     border: none;
     box-shadow: none;
 }
 
-
 .transparent-inner:hover {
     background-color: transparent;
     border: none;
     box-shadow: none;
-    
 }
 
-
+/* Safe place */
+.safe-place {
+    background-color: grey;
+    color: white;
+    border: 2px solid grey;
+    background-image: none;
+    box-shadow: none;
+    border-radius: 50%;
+    padding: 10px 20px;
+    margin: 5px;
+}

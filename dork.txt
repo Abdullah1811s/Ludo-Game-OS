@@ -1,0 +1,43 @@
+1 - complete the grid 
+2 - make the player section code 
+3 - work on movement
+
+
+
+
+for tokens we can make a struct 
+    it will have a current psoiton which store the (x , y)
+    and a 
+
+
+struct name_and_pos{
+    int x , y;
+    char* name
+}
+
+struct tooken
+{
+    name_and_pos *instance;
+    char*color
+}
+
+
+movement logic
+
+
+MOVEMENT AT THE START OF THE GAME:
+    we have the (x , y) values of the start postion
+    all we have to see in which direction we have to move from the start postion ( ← ↑ → )
+                                                                                     ↓
+    we can put constion to make sure it moves according to teh color like if red move up
+    if blue move right from start position 
+
+
+WHAT IF THERE IS A BREAK POINT AND WE HAVE TO GO ( ← ↑ → )
+                                                     ↓
+
+we can break point on the winner section like if (8 , 6) -> move right and start a counter and store the direction in a struct or linked list 
+after that if the counter hit the value 6 check the postion stored if it is left it will move right after the breakpoint
+    
+
+
