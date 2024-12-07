@@ -62,14 +62,18 @@ gboolean move_button_step(gpointer data)
 
 void on_button_clicked(GtkButton *button, gpointer user_data)
 {
-    int target_x = 200; 
-    int target_y = 200; 
+    // Set the target position
+    int target_x = 200; // Example new X position
+    int target_y = 200; // Example new Y position
+
+    // Get the current position of the button
     GtkAllocation allocation;
     gtk_widget_get_allocation(GTK_WIDGET(button), &allocation); // Cast to GtkWidget*
 
     int current_x = allocation.x;
     int current_y = allocation.y;
 
+    // Create a structure to hold button data
     ButtonData *button_data = g_malloc(sizeof(ButtonData));
     button_data->button = GTK_WIDGET(button); // Store as GtkWidget*
     button_data->target_x = target_x;
@@ -77,9 +81,13 @@ void on_button_clicked(GtkButton *button, gpointer user_data)
     button_data->current_x = current_x;
     button_data->current_y = current_y;
     button_data->is_moving = TRUE;
+
+    // Calculate step size for smooth movement
     button_data->step_x = (target_x - current_x) / 10;
     button_data->step_y = (target_y - current_y) / 10;
-    g_timeout_add(80, move_button_step, button_data);
+
+    // Set a timer to move the button smoothly
+    g_timeout_add(50, move_button_step, button_data);
 }
 
 void load_css(const char *css_path)
@@ -92,6 +100,7 @@ void load_css(const char *css_path)
         screen, GTK_STYLE_PROVIDER(provider),
         GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 
+    // Load the CSS file
     GError *error = NULL;
     gtk_css_provider_load_from_path(provider, css_path, &error);
 
@@ -107,25 +116,44 @@ GtkWidget *make_grid(int grid_rows, int grid_cols, int cell_size)
 {
     GtkWidget *fixed = gtk_fixed_new();
     GtkWidget *button;
+
+    // Create the grid
     for (int row = 0; row < grid_rows; row++)
     {
         for (int col = 0; col < grid_cols; col++)
         {
+            // Create a button for each cell
             button = gtk_button_new();
 
+            // Calculate position for the button
             int x_position = col * cell_size;
             int y_position = row * cell_size;
+
+            // Place the button in the grid
             gtk_fixed_put(GTK_FIXED(fixed), button, x_position, y_position);
+
+            // Set button size to fit within the cell
             gtk_widget_set_size_request(button, cell_size - 2, cell_size - 2);
+
+            // Connect the button click event to move the button
             g_signal_connect(button, "clicked", G_CALLBACK(on_button_clicked), NULL);
         }
     }
+
+    // Create the blue button after the grid is populated
     button = gtk_button_new();
     GtkStyleContext *context = gtk_widget_get_style_context(button);
-    gtk_style_context_add_class(context, "blue"); 
+    gtk_style_context_add_class(context, "blue"); // Add class to make it blue
+
+    // Set the position of the blue button to the top (or any specific position)
     gtk_fixed_put(GTK_FIXED(fixed), button, 40, 40);
+
+    // Set size for the blue button
     gtk_widget_set_size_request(button, cell_size - 2, cell_size - 2);
+
+    // Connect the button click event to move the button
     g_signal_connect(button, "clicked", G_CALLBACK(on_button_clicked), NULL);
+
     return fixed;
 }
 
@@ -133,16 +161,31 @@ GtkWidget *make_grid(int grid_rows, int grid_cols, int cell_size)
 int main(int argc, char *argv[])
 {
     GtkWidget *window;
+
+    // Initialize GTK
     gtk_init(&argc, &argv);
+
+    // Load the CSS
     load_css("style.css");
+
+    // Create a new window
     window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     gtk_window_set_title(GTK_WINDOW(window), "15x15 Ludo Grid");
     gtk_window_set_default_size(GTK_WINDOW(window), 0, 650);
+
+    // Connect the destroy signal to quit the application
     g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+
+    // Create the grid and add it to the window
     GtkWidget *grid = make_grid(15, 15, 40);
     gtk_container_add(GTK_CONTAINER(window), grid);
+
+    // Show everything
     gtk_widget_show_all(window);
+
+    // Start the GTK main loop
     gtk_main();
+
     return 0;
 }
 
