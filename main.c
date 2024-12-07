@@ -8,9 +8,11 @@
 #include "structs.h"
 #include <time.h>
 #define GRID_SIZE 15
+#define CELL_SIZE 40
 
 int turn_index = 0;
 int dice_result = 0;
+int all_token_in_home;
 int isSix = 0;
 int is_all_turn_completed[] = {
     0, // make it ture if the red turn is completed
@@ -18,7 +20,18 @@ int is_all_turn_completed[] = {
     0, // make it ture if the yellow turn is completed
     0, // make it ture if the green turn is completed
 };
+int home_coordinate[4][4][2] = {
+    // Red tokens' coordinates (x, y)
+    {{11, 2}, {11, 3}, {12, 2}, {12, 3}},
 
+    // Blue tokens' coordinates (x, y)
+    {{2, 2}, {3, 2}, {3, 3}, {2, 3}},
+
+    // Yellow tokens' coordinates (x, y)
+    {{2, 11}, {3, 11}, {3, 12}, {2, 12}},
+
+    // Green tokens' coordinates (x, y)
+    {{11, 11}, {12, 11}, {12, 12}, {11, 12}}};
 GtkWidget *player_turn_label;
 pthread_mutex_t dice_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
@@ -28,6 +41,11 @@ GAsyncQueue *queue;
 GAsyncQueue *queue1;
 GAsyncQueue *token_button_signal;
 GtkWidget *roll_dice_button;
+GtkWidget *red_token_button;
+GtkWidget *blue_token_button;
+GtkWidget *green_token_button;
+GtkWidget *yellow_token_button;
+
 struct player_data turn_array[4];
 
 //(x , y) for the backend
@@ -56,8 +74,10 @@ struct start_pos start_places[] = {
     {6, 1, "blue"},
     {13, 6, "red"},
     {8, 13, "green"},
-    {1, 8, "yellow"}};
+    {1, 8, "yellow"},
+};
 
+// this is one single token
 struct token red_token[] = {
     {&token1_red_name_pos, "red"},
     {&token2_red_name_pos, "red"},
@@ -65,16 +85,19 @@ struct token red_token[] = {
     {&token4_red_name_pos, "red"}};
 
 struct token blue_token[] = {
+
     {&token1_blue_name_pos, "blue"},
     {&token2_blue_name_pos, "blue"},
     {&token3_blue_name_pos, "blue"},
-    {&token4_blue_name_pos, "blue"}};
+    {&token4_blue_name_pos, "blue"},
+};
 
 struct token yellow_token[] = {
     {&token1_yellow_name_pos, "yellow"},
     {&token2_yellow_name_pos, "yellow"},
     {&token3_yellow_name_pos, "yellow"},
-    {&token4_yellow_name_pos, "yellow"}};
+    {&token4_yellow_name_pos, "yellow"},
+};
 
 struct token green_token[] = {
     {&token1_green_name_pos, "green"},
@@ -89,7 +112,6 @@ int is_start_place(int i, int j, const char **color);
 void assign_color(GtkStyleContext *context, int i, int j);
 void apply_css();
 void on_click(GtkWidget *wid, gpointer data);
-int dice_value();
 void roll_dice(GtkWidget *widget, gpointer data);
 void shuffle_turn();
 void update_dice_label(GtkWidget *label);
@@ -102,11 +124,9 @@ int get_dice_value();
 void roll_again(GtkWidget *widget, gpointer data);
 void *check_token_selection(void *arg);
 int checking_all_turn();
+int still_in_home(struct player_data *single_player);
 void token_button(GtkWidget *button, gpointer data);
-int do_movement(struct player_data* single_player);
-
-
-
+int do_movement(struct player_data *single_player, gchar *selected_token_name);
 
 int main(int arg, char *argv[])
 {
@@ -215,53 +235,177 @@ dice roll
     update the x , y of the token selected\
     return from the movement fucntion
 */
+/*
+       APPROACH
+
+       check the token selected
+
+       first check if all the token are in home
+           if yes then see the dice value at 0 index if 6 ask player to select a token for opening
+           if no
+               start a counter
+               if(counetr > 1)
+                   get the (x , y) and push it in golbal array
+               ask player to select the token
+               check if the token selected belong to the player
+               if yes
+                   match the (x , y) in golbal array with selected token
+                   update the token x and y
+                   move
+   */
+int still_in_home(struct player_data *single_player)
+{
+    char *player_name = single_player->player_name;
+    int all_tokens_in_home = 1; 
+
+    if (strcmp(player_name, "red") == 0)
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            if (single_player->all_tokens[i].name_and_pos->x != home_coordinate[0][i][0] ||
+                single_player->all_tokens[i].name_and_pos->y != home_coordinate[0][i][1])
+            {
+                all_tokens_in_home = 0;
+                printf("Red token %d is NOT in home position at (%d, %d)\n", i + 1,
+                       single_player->all_tokens[i].name_and_pos->x,
+                       single_player->all_tokens[i].name_and_pos->y);
+            }
+        }
+    }
+
+    if (strcmp(player_name, "blue") == 0)
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            if (single_player->all_tokens[i].name_and_pos->x != home_coordinate[1][i][0] ||
+                single_player->all_tokens[i].name_and_pos->y != home_coordinate[1][i][1])
+            {
+                all_tokens_in_home = 0;
+                printf("Blue token %d is NOT in home position at (%d, %d)\n", i + 1,
+                       single_player->all_tokens[i].name_and_pos->x,
+                       single_player->all_tokens[i].name_and_pos->y);
+            }
+        }
+    }
+
+    if (strcmp(player_name, "green") == 0)
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            if (single_player->all_tokens[i].name_and_pos->x != home_coordinate[3][i][0] ||
+                single_player->all_tokens[i].name_and_pos->y != home_coordinate[3][i][1])
+            {
+                all_tokens_in_home = 0;
+                printf("Green token %d is NOT in home position at (%d, %d)\n", i + 1,
+                       single_player->all_tokens[i].name_and_pos->x,
+                       single_player->all_tokens[i].name_and_pos->y);
+            }
+        }
+    }
+
+    if (strcmp(player_name, "yellow") == 0)
+    {
+        for (int i = 0; i < 4; i++)
+        {
+            if (single_player->all_tokens[i].name_and_pos->x != home_coordinate[2][i][0] ||
+                single_player->all_tokens[i].name_and_pos->y != home_coordinate[2][i][1])
+            {
+                all_tokens_in_home = 0;
+                printf("Yellow token %d is NOT in home position at (%d, %d)\n", i + 1,
+                       single_player->all_tokens[i].name_and_pos->x,
+                       single_player->all_tokens[i].name_and_pos->y);
+            }
+        }
+    }
+
+    if (all_tokens_in_home)
+    {
+        printf("All tokens for player %s are in home position.\n", player_name);
+        return 1;
+        printf("return");
+    }
+    else
+    {
+        printf("Some tokens for player %s are NOT in home position.\n", player_name);
+        return 0;
+    }
+}
+
+int do_movement(struct player_data *single_player, gchar *selected_token_name)
+{
+    /*
+    check if in home or not
+    if all 4 in home check dice value
+    if dice is 6 ask player to select toke
+
+    */
+}
 
 void *check_token_selection(void *arg)
 {
-    struct player_data *single_player = (struct player_data *)arg;
-    int *done_with_movement = malloc(sizeof(int));
-    int isMatch = 0;
-    while (!isMatch)
-    {
-        gpointer selected_token_info = g_async_queue_pop(token_button_signal);
-        if (selected_token_info != NULL)
-        {
 
-            gchar *selected_token_name = (gchar *)selected_token_info;
-            printf("The selected token is %s\n", selected_token_name);
-            for (int i = 0; i < 4; i++) // selected
+    int *done_with_movement = malloc(sizeof(int));
+    struct player_data *single_player = (struct player_data *)arg;
+    char *selected_token_name = NULL;
+    int isMatch = 0;
+    if (!single_player || !single_player->all_tokens)
+    {
+        printf("Error: Invalid player data or tokens\n");
+        return NULL;
+    }
+    all_token_in_home = still_in_home(single_player);
+    printf("%d" , all_token_in_home);
+    if (all_token_in_home)
+    {
+        int dice_value = single_player->dice_value[0];
+        printf("%d" , dice_value);
+        while (!isMatch)
+        {
+            gpointer selected_token_info = g_async_queue_pop(token_button_signal);
+            if (!selected_token_info)
             {
-                if (strcmp(selected_token_name, single_player->all_tokens[i].name_and_pos->name) == 0)
+                printf("Error: Received NULL token info\n");
+                continue;
+            }
+
+            selected_token_name = (char *)selected_token_info;
+            if (!selected_token_name)
+            {
+                printf("Error: Invalid selected token name\n");
+                continue;
+            }
+
+            printf("Received token info: %s\n", selected_token_name);
+
+            for (int i = 0; i < 3; i++)
+            {
+                if (single_player->all_tokens[i].name_and_pos &&
+                    single_player->all_tokens[i].name_and_pos->name &&
+                    strcmp(selected_token_name, single_player->all_tokens[i].name_and_pos->name) == 0)
                 {
-                    printf("The token is matched with %s ", single_player->all_tokens[i].name_and_pos->name);
+                    printf("The token is matched with %s\n", single_player->all_tokens[i].name_and_pos->name);
                     isMatch = 1;
-                    break;
-                }
-                else
-                {
-                    g_idle_add((GSourceFunc)update_label, "please select the right token");
+                    return selected_token_name;
                 }
             }
-        }
-        g_free(selected_token_info);
-        printf("going in loop again\n");
-    }
-    g_idle_add((GSourceFunc)update_label, "player doing the mvoement");
-    // add movement login
-    printf("Player Name: %s\n", single_player->player_name);
-    printf("Dice Values: %d, %d, %d\n", single_player->dice_value[0], single_player->dice_value[1], single_player->dice_value[2]);
-    printf("Can Go Home: %s\n", single_player->can_go_home ? "Yes" : "No");
 
-    // g_free(selected_token_info);
-    *done_with_movement = 1;
-    g_idle_add((GSourceFunc)update_label, "next player turn");
-    return (void *)done_with_movement;
+            if (!isMatch)
+            {
+                printf("Token mismatch. Please try again.\n");
+                g_idle_add((GSourceFunc)update_label, "Please select the right token");
+            }
+        }
+        if (dice_value == 6)
+        {
+            printf("chosing a token dice > 6\n");
+            g_idle_add((GSourceFunc)update_label, "Please select the token for movement");
+        }
+    }
 }
 
 void get_player_dice_value(struct player_data *single_player)
 {
     int single_player_dice_value = get_dice_value();
-
     pthread_mutex_lock(&dice_mutex);
     printf("The dice is locked by the player name %s\n", single_player->player_name);
     printf("The value of dice is %d\n", single_player_dice_value);
@@ -291,13 +435,12 @@ void get_player_dice_value(struct player_data *single_player)
     }
 
     pthread_t movement_thread;
+    printf("calling thread\n");
     pthread_create(&movement_thread, NULL, check_token_selection, (void *)single_player);
     int *done_with_movement;
     pthread_join(movement_thread, (void **)&done_with_movement);
-    int check_all_turn = checking_all_turn();
     if (done_with_movement && *done_with_movement)
     {
-
         printf("Player %s completed their turn, unlocking the mutex\n", single_player->player_name);
         free(done_with_movement);
         pthread_mutex_unlock(&dice_mutex);
@@ -305,13 +448,12 @@ void get_player_dice_value(struct player_data *single_player)
     else
     {
         printf("Not done with the movement\n");
-        is_all_turn_completed[turn_index] = 1;
-        printf("%d ", is_all_turn_completed[turn_index]);
-        turn_index++;
         free(done_with_movement);
+        printf("unclocking the mutex\n");
         pthread_mutex_unlock(&dice_mutex);
     }
 }
+
 void *manage_player_thread(void *arg)
 {
     struct player_data *single_player = (struct player_data *)arg;
@@ -384,20 +526,18 @@ void on_click(GtkWidget *widget, gpointer data)
     printf("Button clicked at position row and col: (%d, %d)\n", coordinates->x, coordinates->y);
 }
 
-int dice_value()
-{
-    srand(time(0));
-    return (rand() % 6) + 1;
-}
 void roll_again(GtkWidget *widget, gpointer data)
 {
-    dice_result = dice_value();
+    srand(time(0));
+    dice_result = (rand() % 6) + 1;
     g_async_queue_push(queue1, "Start");
     update_dice_label((GtkWidget *)data);
 }
+
 void roll_dice(GtkWidget *widget, gpointer data)
 {
-    dice_result = dice_value();
+    srand(time(0));
+    dice_result = (rand() % 6) + 1;
     g_async_queue_push(queue, "Start");
     update_dice_label((GtkWidget *)data);
 }
@@ -431,231 +571,110 @@ GtkWidget *make_grid()
 {
     GtkWidget *window;
     window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
-    gtk_window_set_title(GTK_WINDOW(window), "Ludo grid");
-    gtk_window_set_default_size(GTK_WINDOW(window), 600, 600);
+    gtk_window_set_title(GTK_WINDOW(window), "Ludo Grid");
+    int window_size = 900;
+    int cell_size = window_size / GRID_SIZE;
+
+    gtk_window_set_default_size(GTK_WINDOW(window), window_size, window_size);
     g_signal_connect(window, "destroy", G_CALLBACK(gtk_main_quit), NULL);
 
     GtkWidget *vbox = gtk_box_new(GTK_ORIENTATION_VERTICAL, 10);
-    grid = gtk_grid_new();
+    grid = gtk_fixed_new();
+    GtkWidget *button;
+
+    int num_tokens = sizeof(tokens) / sizeof(tokens[0]);
     for (int i = 0; i < GRID_SIZE; i++)
     {
         for (int j = 0; j < GRID_SIZE; j++)
         {
-            GtkWidget *button = gtk_button_new_with_label("");
+            button = gtk_button_new();
             GtkStyleContext *context = gtk_widget_get_style_context(button);
+
             struct xy_coordinate *coordinates = g_malloc(sizeof(struct xy_coordinate));
             coordinates->x = i;
             coordinates->y = j;
 
-            const char *start_color = NULL;
-            if (i == 11 && j == 2)
-            {
-                GtkWidget *button1 = gtk_button_new_with_label("R1");
-                GtkStyleContext *context = gtk_widget_get_style_context(button1);
-                gtk_style_context_add_class(context, "red");
-                g_signal_connect(button1, "clicked", G_CALLBACK(token_button), NULL);
-                gtk_grid_attach(GTK_GRID(grid), button1, j, i, 1, 1);
-            }
-            if (i == 11 && j == 3)
-            {
-                GtkWidget *button1 = gtk_button_new_with_label("R2");
-                GtkStyleContext *context = gtk_widget_get_style_context(button1);
-                gtk_style_context_add_class(context, "red");
-                g_signal_connect(button1, "clicked", G_CALLBACK(token_button), NULL);
-                gtk_grid_attach(GTK_GRID(grid), button1, j, i, 1, 1);
-            }
-            if (i == 12 && j == 2)
-            {
-                GtkWidget *button1 = gtk_button_new_with_label("R3");
-                GtkStyleContext *context = gtk_widget_get_style_context(button1);
-                gtk_style_context_add_class(context, "red");
-                g_signal_connect(button1, "clicked", G_CALLBACK(token_button), NULL);
-                gtk_grid_attach(GTK_GRID(grid), button1, j, i, 1, 1);
-            }
-            if (i == 12 && j == 3)
-            {
-                GtkWidget *button1 = gtk_button_new_with_label("R4");
-                GtkStyleContext *context = gtk_widget_get_style_context(button1);
-                gtk_style_context_add_class(context, "red");
-                g_signal_connect(button1, "clicked", G_CALLBACK(token_button), NULL);
-                gtk_grid_attach(GTK_GRID(grid), button1, j, i, 1, 1);
-            }
-            if (i == 11 && j == 11)
-            {
-                GtkWidget *button1 = gtk_button_new_with_label("G1");
-                GtkStyleContext *context = gtk_widget_get_style_context(button1);
-                gtk_style_context_add_class(context, "green");
-                g_signal_connect(button1, "clicked", G_CALLBACK(token_button), NULL);
-                gtk_grid_attach(GTK_GRID(grid), button1, j, i, 1, 1);
-            }
-            if (i == 11 && j == 12)
-            {
-                GtkWidget *button1 = gtk_button_new_with_label("G2");
-                GtkStyleContext *context = gtk_widget_get_style_context(button1);
-                gtk_style_context_add_class(context, "green");
-                g_signal_connect(button1, "clicked", G_CALLBACK(token_button), NULL);
-                gtk_grid_attach(GTK_GRID(grid), button1, j, i, 1, 1);
-            }
-            if (i == 12 && j == 11)
-            {
-                GtkWidget *button1 = gtk_button_new_with_label("G3");
-                GtkStyleContext *context = gtk_widget_get_style_context(button1);
-                gtk_style_context_add_class(context, "green");
-                g_signal_connect(button1, "clicked", G_CALLBACK(token_button), NULL);
-                gtk_grid_attach(GTK_GRID(grid), button1, j, i, 1, 1);
-            }
-            if (i == 12 && j == 12)
-            {
-                GtkWidget *button1 = gtk_button_new_with_label("G4");
-                GtkStyleContext *context = gtk_widget_get_style_context(button1);
-                gtk_style_context_add_class(context, "green");
-                g_signal_connect(button1, "clicked", G_CALLBACK(token_button), NULL);
-                gtk_grid_attach(GTK_GRID(grid), button1, j, i, 1, 1);
-            }
+            int x_position = j * cell_size;
+            int y_position = i * cell_size;
 
-            if (i == 2 && j == 2)
+            const char *start_color = NULL;
+            int is_token_position = 0;
+            for (int k = 0; k < num_tokens; k++)
             {
-                GtkWidget *button1 = gtk_button_new_with_label("B1");
-                GtkStyleContext *context = gtk_widget_get_style_context(button1);
-                gtk_style_context_add_class(context, "blue");
-                g_signal_connect(button1, "clicked", G_CALLBACK(token_button), NULL);
-                gtk_grid_attach(GTK_GRID(grid), button1, j, i, 1, 1);
+                if (i == tokens[k].x && j == tokens[k].y)
+                {
+                    is_token_position = 1;
+                    break;
+                }
             }
-            if (i == 2 && j == 3)
-            {
-                GtkWidget *button1 = gtk_button_new_with_label("B2");
-                GtkStyleContext *context = gtk_widget_get_style_context(button1);
-                gtk_style_context_add_class(context, "blue");
-                g_signal_connect(button1, "clicked", G_CALLBACK(token_button), NULL);
-                gtk_grid_attach(GTK_GRID(grid), button1, j, i, 1, 1);
-            }
-            if (i == 3 && j == 2)
-            {
-                GtkWidget *button1 = gtk_button_new_with_label("B3");
-                GtkStyleContext *context = gtk_widget_get_style_context(button1);
-                gtk_style_context_add_class(context, "blue");
-                g_signal_connect(button1, "clicked", G_CALLBACK(token_button), NULL);
-                gtk_grid_attach(GTK_GRID(grid), button1, j, i, 1, 1);
-            }
-            if (i == 3 && j == 3)
-            {
-                GtkWidget *button1 = gtk_button_new_with_label("B4");
-                GtkStyleContext *context = gtk_widget_get_style_context(button1);
-                gtk_style_context_add_class(context, "blue");
-                g_signal_connect(button1, "clicked", G_CALLBACK(token_button), NULL);
-                gtk_grid_attach(GTK_GRID(grid), button1, j, i, 1, 1);
-            }
-            if (i == 2 && j == 11)
-            {
-                GtkWidget *button1 = gtk_button_new_with_label("Y1");
-                GtkStyleContext *context = gtk_widget_get_style_context(button1);
-                gtk_style_context_add_class(context, "yellow");
-                g_signal_connect(button1, "clicked", G_CALLBACK(token_button), NULL);
-                gtk_grid_attach(GTK_GRID(grid), button1, j, i, 1, 1);
-            }
-            if (i == 3 && j == 11)
-            {
-                GtkWidget *button1 = gtk_button_new_with_label("Y3");
-                GtkStyleContext *context = gtk_widget_get_style_context(button1);
-                gtk_style_context_add_class(context, "yellow");
-                g_signal_connect(button1, "clicked", G_CALLBACK(token_button), NULL);
-                gtk_grid_attach(GTK_GRID(grid), button1, j, i, 1, 1);
-            }
-            if (i == 3 && j == 12)
-            {
-                GtkWidget *button1 = gtk_button_new_with_label("Y4");
-                GtkStyleContext *context = gtk_widget_get_style_context(button1);
-                gtk_style_context_add_class(context, "yellow");
-                g_signal_connect(button1, "clicked", G_CALLBACK(token_button), NULL);
-                gtk_grid_attach(GTK_GRID(grid), button1, j, i, 1, 1);
-            }
-            if (i == 2 && j == 12)
-            {
-                GtkWidget *button1 = gtk_button_new_with_label("Y2");
-                GtkStyleContext *context = gtk_widget_get_style_context(button1);
-                gtk_style_context_add_class(context, "yellow");
-                g_signal_connect(button1, "clicked", G_CALLBACK(token_button), NULL);
-                gtk_grid_attach(GTK_GRID(grid), button1, j, i, 1, 1);
-            }
-            if (is_start_place(i, j, &start_color))
-            {
-                gtk_style_context_add_class(context, start_color);
-            }
+            if (is_token_position)
+                continue;
             else
             {
+                if (is_start_place(i, j, &start_color))
+                {
+                    gtk_style_context_add_class(context, start_color);
+                }
+                else
+                {
+                    assign_color(context, i, j);
+                }
 
-                if (j == 7)
-                {
-                    if (i >= 1 && i <= 5)
-                    {
-                        gtk_style_context_add_class(context, "yellow");
-                    }
-                    else if (i >= 9 && i <= 13)
-                    {
-                        gtk_style_context_add_class(context, "red");
-                    }
-                }
-                else if (i == 7)
-                {
-                    if (j >= 1 && j <= 5)
-                    {
-                        gtk_style_context_add_class(context, "blue");
-                    }
-                    else if (j >= 9 && j <= 13)
-                    {
-                        gtk_style_context_add_class(context, "green");
-                    }
-                }
-                else if (i <= 5 && j <= 5)
-                {
-
-                    if (i > 0 && i < 5 && j > 0 && j < 5)
-                    {
-                        gtk_style_context_add_class(context, "transparent-inner");
-                    }
-                    else
-                    {
-                        gtk_style_context_add_class(context, "top-left");
-                    }
-                }
-                else if (i <= 5 && j >= 9)
-                {
-                    if (i > 0 && i < 5 && j > 9 && j < 14)
-                    {
-                        gtk_style_context_add_class(context, "transparent-inner");
-                    }
-                    else
-                    {
-                        gtk_style_context_add_class(context, "top-right");
-                    }
-                }
-                else if (i >= 9 && j <= 5)
-                {
-                    if (i > 9 && i < 14 && j > 0 && j < 5)
-                    {
-                        gtk_style_context_add_class(context, "transparent-inner");
-                    }
-                    else
-                    {
-                        gtk_style_context_add_class(context, "bottom-left");
-                    }
-                }
-                else if (i >= 9 && j >= 9)
-                {
-                    if (i > 9 && i < 14 && j > 9 && j < 14)
-                    {
-                        gtk_style_context_add_class(context, "transparent-inner");
-                    }
-                    else
-                    {
-                        gtk_style_context_add_class(context, "bottom-right");
-                    }
-                }
+                gtk_fixed_put(GTK_FIXED(grid), button, x_position, y_position);
+                gtk_widget_set_size_request(button, cell_size, cell_size);
+                g_signal_connect(button, "clicked", G_CALLBACK(on_click), coordinates);
             }
-
-            gtk_grid_attach(GTK_GRID(grid), button, j, i, 1, 1);
-            g_signal_connect(button, "clicked", G_CALLBACK(on_click), coordinates);
         }
+    }
+
+    // adding red token
+    for (int i = 0; i < 4; i++)
+    {
+        red_token_button = gtk_button_new_with_label(red_token[i].name_and_pos->name);
+        g_signal_connect(red_token_button, "clicked", G_CALLBACK(token_button), NULL);
+        GtkStyleContext *context = gtk_widget_get_style_context(red_token_button);
+        gtk_style_context_add_class(context, "red");
+        gtk_fixed_put(GTK_FIXED(grid),
+                      red_token_button,
+                      red_token[i].name_and_pos->y * cell_size,
+                      red_token[i].name_and_pos->x * cell_size);
+    }
+    // adding blue token
+    for (int i = 0; i < 4; i++)
+    {
+
+        blue_token_button = gtk_button_new_with_label(blue_token[i].name_and_pos->name);
+        g_signal_connect(blue_token_button, "clicked", G_CALLBACK(token_button), NULL);
+        GtkStyleContext *context = gtk_widget_get_style_context(blue_token_button);
+        gtk_style_context_add_class(context, "blue");
+        gtk_fixed_put(GTK_FIXED(grid),
+                      blue_token_button,
+                      blue_token[i].name_and_pos->y * cell_size,
+                      blue_token[i].name_and_pos->x * cell_size);
+    }
+    // adding yellow token
+    for (int i = 0; i < 4; i++)
+    {
+        yellow_token_button = gtk_button_new_with_label(yellow_token[i].name_and_pos->name);
+        g_signal_connect(yellow_token_button, "clicked", G_CALLBACK(token_button), NULL);
+        GtkStyleContext *context = gtk_widget_get_style_context(yellow_token_button);
+        gtk_style_context_add_class(context, "yellow");
+        gtk_fixed_put(GTK_FIXED(grid),
+                      yellow_token_button,
+                      yellow_token[i].name_and_pos->y * cell_size,
+                      yellow_token[i].name_and_pos->x * cell_size);
+    }
+    // adding green token
+    for (int i = 0; i < 4; i++)
+    {
+        green_token_button = gtk_button_new_with_label(green_token[i].name_and_pos->name);
+        g_signal_connect(green_token_button, "clicked", G_CALLBACK(token_button), NULL);
+        GtkStyleContext *context = gtk_widget_get_style_context(green_token_button);
+        gtk_style_context_add_class(context, "green");
+        gtk_fixed_put(GTK_FIXED(grid),
+                      green_token_button,
+                      green_token[i].name_and_pos->y * cell_size,
+                      green_token[i].name_and_pos->x * cell_size);
     }
 
     GtkWidget *dice_controls_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 10);
@@ -668,10 +687,10 @@ GtkWidget *make_grid()
     gtk_style_context_add_class(gtk_widget_get_style_context(roll_again_button), "roll-again-button");
 
     g_signal_connect(roll_dice_button, "clicked", G_CALLBACK(roll_dice), dice_label);
-    g_signal_connect(roll_again_button, "clicked", G_CALLBACK(roll_again), dice_label); // Add handler for Roll Again
+    g_signal_connect(roll_again_button, "clicked", G_CALLBACK(roll_again), dice_label);
 
     gtk_box_pack_start(GTK_BOX(dice_controls_box), roll_dice_button, FALSE, FALSE, 0);
-    gtk_box_pack_start(GTK_BOX(dice_controls_box), roll_again_button, FALSE, FALSE, 0); // Add the Roll Again button
+    gtk_box_pack_start(GTK_BOX(dice_controls_box), roll_again_button, FALSE, FALSE, 0);
     gtk_box_pack_start(GTK_BOX(dice_controls_box), dice_label, FALSE, FALSE, 0);
 
     player_turn_label = gtk_label_new("Turn: ");
@@ -685,12 +704,12 @@ GtkWidget *make_grid()
     gtk_widget_set_halign(player_turn_label, GTK_ALIGN_END);
     gtk_widget_set_valign(player_turn_label, GTK_ALIGN_CENTER);
     gtk_style_context_add_class(gtk_widget_get_style_context(player_turn_label), "dice-result-label");
+
     gtk_box_pack_start(GTK_BOX(vbox), grid, TRUE, TRUE, 0);
     gtk_box_pack_start(GTK_BOX(vbox), bottom_controls_box, FALSE, FALSE, 10);
 
     gtk_container_add(GTK_CONTAINER(window), vbox);
-
-    // apply_css();
+    apply_css();
     return window;
 }
 
@@ -699,7 +718,7 @@ int is_start_place(int i, int j, const char **color)
     for (int k = 0; k < sizeof(start_places) / sizeof(start_places[0]); k++)
     {
         if (start_places[k].x == i && start_places[k].y == j)
-        {   
+        {
             *color = start_places[k].color;
             return 1;
         }
@@ -709,12 +728,46 @@ int is_start_place(int i, int j, const char **color)
 
 void assign_color(GtkStyleContext *context, int i, int j)
 {
+    if (j == 7)
+    {
+        if (i >= 1 && i <= 5)
+            gtk_style_context_add_class(context, "yellow");
+        else if (i >= 9 && i <= 13)
+            gtk_style_context_add_class(context, "red");
+    }
+    else if (i == 7)
+    {
+        if (j >= 1 && j <= 5)
+            gtk_style_context_add_class(context, "blue");
+        else if (j >= 9 && j <= 13)
+            gtk_style_context_add_class(context, "green");
+    }
+    else if (i <= 5 && j <= 5)
+    {
+        if (i > 0 && i < 5 && j > 0 && j < 5)
+            gtk_style_context_add_class(context, "transparent-inner");
+        else
+            gtk_style_context_add_class(context, "top-left");
+    }
+    else if (i <= 5 && j >= 9)
+    {
+        if (i > 0 && i < 5 && j > 9 && j < 14)
+            gtk_style_context_add_class(context, "transparent-inner");
+        else
+            gtk_style_context_add_class(context, "top-right");
+    }
+    else if (i >= 9 && j <= 5)
+    {
+        if (i > 9 && i < 14 && j > 0 && j < 5)
+            gtk_style_context_add_class(context, "transparent-inner");
+        else
+            gtk_style_context_add_class(context, "bottom-left");
+    }
+    else if (i >= 9 && j >= 9)
+    {
+        if (i > 9 && i < 14 && j > 9 && j < 14)
+            gtk_style_context_add_class(context, "transparent-inner");
+        else
+            gtk_style_context_add_class(context, "bottom-right");
+    }
 }
-
-/*
-make separate button form token and attach in grid add on click funciton
-then for movement ask user which token he want to move when he click on the token the token will change the postion
-based on the dice value
-make a function on click which take label and send on click message same label then compair the label like if it is RT1 or RT2
-based on that get the corrdintates and do movement
-*/
