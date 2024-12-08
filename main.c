@@ -13,6 +13,7 @@ int turn_index = 0;
 int dice_result = 0;
 int all_token_in_home;
 int isSix = 0;
+int token_index = 0;
 int cell_size;
 int is_all_turn_completed[] = {
     0, // make it ture if the red turn is completed
@@ -20,6 +21,7 @@ int is_all_turn_completed[] = {
     0, // make it ture if the yellow turn is completed
     0, // make it ture if the green turn is completed
 };
+struct token moved_token[50];
 int home_coordinate[4][4][2] = {
     // Red tokens' coordinates (x, y)
     {{11, 2}, {11, 3}, {12, 2}, {12, 3}},
@@ -116,6 +118,7 @@ void apply_css();
 void on_click(GtkWidget *wid, gpointer data);
 void roll_dice(GtkWidget *widget, gpointer data);
 void shuffle_turn();
+char *concat_strings(const char *str1, const char *str2);
 void update_dice_label(GtkWidget *label);
 void make_player_thread(struct player_data *player_array, size_t size);
 void initialize_player(int nummber_of_player);
@@ -129,11 +132,18 @@ int checking_all_turn();
 int still_in_home(struct player_data *single_player);
 void token_button(GtkWidget *button, gpointer data);
 int do_movement(struct player_data *single_player, gchar *selected_token_name);
+int check_break_point(int *current_x, int *current_y, int *target_x, int *target_y, int dice_value, struct player_data *single_player, char *selected_token_name);
 char *returned_token(struct player_data *single_player);
 int selected_token_in_home(int x, int y, struct player_data *single_player);
 void move(int current_x, int current_y, int target_x, int target_y, gchar *selected_token_name, struct player_data *single_player);
 gboolean move_callback(gpointer data);
 void print_player_detail(struct player_data *single_player);
+void movement_helper(struct player_data *single_player);
+void update_player_token(struct player_data *single_player, gchar *selected_token_name, int target_x, int target_y);
+void check_for_kill(int target_x, int target_y, char *token_name);
+void top_left_L(int *target_x, int *target_y, int value);
+
+struct name_and_pos *get_home_token(const char *token_name);
 int main(int arg, char *argv[])
 {
     gtk_init(&arg, &argv);
@@ -146,6 +156,31 @@ int main(int arg, char *argv[])
     gtk_widget_show_all(window);
     gtk_main();
     return 0;
+}
+
+char *concat_strings(const char *str1, const char *str2)
+{
+    if (str1 == NULL || str2 == NULL)
+    {
+        printf("Error: One of the input strings is NULL\n");
+        return NULL;
+    }
+
+    size_t length1 = strlen(str1);
+    size_t length2 = strlen(str2);
+    size_t total_length = length1 + length2 + 1;
+
+    char *result = (char *)malloc(total_length);
+    if (result == NULL)
+    {
+        printf("Error: Memory allocation failed\n");
+        return NULL;
+    }
+
+    strcpy(result, str1);
+    strcat(result, str2);
+
+    return result;
 }
 
 void *manage_backend(void *arg)
@@ -231,20 +266,6 @@ int checking_all_turn()
     }
     return all_completed;
 }
-
-/*
-
-dice roll
-    ask user to select token --> done
-    wait for the button signal -->done
-    button signale will return tye label -->done
-    check the name of lebel in single_player -->done
-    store the current x , y
-    get the updated x, y
-    show in UI
-    update the x , y of the token selected\
-    return from the movement fucntion
-*/
 
 int still_in_home(struct player_data *single_player)
 {
@@ -378,7 +399,7 @@ int selected_token_in_home(int selected_button_x, int selected_button_y, struct 
     int is_selected_in_home = 0;
     if (strcmp(single_player->player_name, "red") == 0)
     {
-        printf("in red\n");
+
         for (int i = 0; i < 4; i++)
         {
             if (selected_button_x == home_coordinate[0][i][0] && selected_button_y == home_coordinate[0][i][1])
@@ -391,40 +412,43 @@ int selected_token_in_home(int selected_button_x, int selected_button_y, struct 
     }
     else if (strcmp(single_player->player_name, "blue") == 0)
     {
-        printf("in blue\n");
         for (int i = 0; i < 4; i++)
         {
             if (selected_button_x == home_coordinate[1][i][0] && selected_button_y == home_coordinate[1][i][1])
             {
                 printf("The blue token is still in home\n");
-                break;
+                is_selected_in_home = 1;
+                return is_selected_in_home;
             }
         }
     }
     else if (strcmp(single_player->player_name, "yellow") == 0)
     {
-        printf("in yellow\n");
+
         for (int i = 0; i < 4; i++)
         {
             if (selected_button_x == home_coordinate[2][i][0] && selected_button_y == home_coordinate[2][i][1])
             {
                 printf("The yellow token is still in home\n");
-                break;
+                is_selected_in_home = 1;
+                return is_selected_in_home;
             }
         }
     }
     else if (strcmp(single_player->player_name, "green") == 0)
     {
-        printf("in green\n");
+
         for (int i = 0; i < 4; i++)
         {
             if (selected_button_x == home_coordinate[3][i][0] && selected_button_y == home_coordinate[3][i][1])
             {
                 printf("The green token is still in home\n");
-                break;
+                is_selected_in_home = 1;
+                return is_selected_in_home;
             }
         }
     }
+    return is_selected_in_home;
 }
 
 void print_player_detail(struct player_data *single_player)
@@ -474,12 +498,100 @@ gboolean move_callback(gpointer data)
     int *positions = (int *)data;
     int target_x_pixel = positions[3] * cell_size;
     int target_y_pixel = positions[2] * cell_size;
-    printf("%d", target_y_pixel);
     gtk_fixed_move(GTK_FIXED(gtk_widget_get_parent(selected_button)), selected_button, target_x_pixel, target_y_pixel);
-    g_free(positions); // Free the allocated memory
-    return FALSE;      // Stop further timeouts
+    // g_free(positions); // Free the allocated memory
+    return FALSE; // Stop further timeouts
 }
 
+struct name_and_pos *get_home_token(const char *token_name)
+{
+    if (strcmp(token_name, "R1") == 0)
+        return &token1_red_name_pos;
+    if (strcmp(token_name, "R2") == 0)
+        return &token2_red_name_pos;
+    if (strcmp(token_name, "R3") == 0)
+        return &token3_red_name_pos;
+    if (strcmp(token_name, "R4") == 0)
+        return &token4_red_name_pos;
+
+    if (strcmp(token_name, "B1") == 0)
+        return &token1_blue_name_pos;
+    if (strcmp(token_name, "B2") == 0)
+        return &token2_blue_name_pos;
+    if (strcmp(token_name, "B3") == 0)
+        return &token3_blue_name_pos;
+    if (strcmp(token_name, "B4") == 0)
+        return &token4_blue_name_pos;
+
+    if (strcmp(token_name, "Y1") == 0)
+        return &token1_yellow_name_pos;
+    if (strcmp(token_name, "Y2") == 0)
+        return &token2_yellow_name_pos;
+    if (strcmp(token_name, "Y3") == 0)
+        return &token3_yellow_name_pos;
+    if (strcmp(token_name, "Y4") == 0)
+        return &token4_yellow_name_pos;
+
+    if (strcmp(token_name, "G1") == 0)
+        return &token1_green_name_pos;
+    if (strcmp(token_name, "G2") == 0)
+        return &token2_green_name_pos;
+    if (strcmp(token_name, "G3") == 0)
+        return &token3_green_name_pos;
+    if (strcmp(token_name, "G4") == 0)
+        return &token4_green_name_pos;
+
+    return NULL; // If no match found
+}
+
+void update_player_token(struct player_data *single_player, gchar *selected_token_name, int target_x, int target_y)
+{
+    for (int i = 0; i < 4; i++)
+    {
+        if (strcmp(single_player->all_tokens[i].name_and_pos->name, selected_token_name) == 0)
+        {
+            single_player->all_tokens[i].name_and_pos->x = target_x;
+            single_player->all_tokens[i].name_and_pos->y = target_y;
+            break;
+        }
+    }
+}
+void check_for_kill(int target_x, int target_y, char *token_name)
+{
+    int is_killed = 0; // Flag to track if a kill is found
+
+    for (int i = 0; i < turn_index; i++)
+    { // Loop through the moved_token array
+        if (moved_token[i].name_and_pos->x == target_x && moved_token[i].name_and_pos->y == target_y)
+        {
+            if (strncmp(moved_token[i].name_and_pos->y, token_name, 2) != 0)
+            {
+                is_killed = 1;
+
+                // Get the home position of the killed token
+                struct name_and_pos *home_token = get_home_token(moved_token[i].name_and_pos->name);
+                if (home_token)
+                {
+                    int *positions = g_new(int, 4);
+                    positions[2] = target_x;
+                    positions[3] = target_y;
+                    turn_array[i].can_go_home = 1;
+                    g_timeout_add(10, move_callback, positions);
+                }
+                else
+                {
+                    printf("Home position not found for %s\n");
+                }
+                break; // Exit loop after processing the kill
+            }
+        }
+    }
+
+    if (!is_killed)
+    {
+        printf("No kill at position (%d, %d)\n", target_x, target_y);
+    }
+}
 void move(int current_x, int current_y, int target_x, int target_y, gchar *selected_token_name, struct player_data *single_player)
 {
     int *positions = g_new(int, 4);
@@ -487,22 +599,313 @@ void move(int current_x, int current_y, int target_x, int target_y, gchar *selec
     positions[1] = current_y;
     positions[2] = target_x;
     positions[3] = target_y;
-    printf("X : %d , Y : %d" , target_x , target_y);
-    for (int i = 0; i < 4; i++)
+    update_player_token(single_player, selected_token_name, target_x, target_y);
+    g_timeout_add(10, move_callback, positions);
+}
+void top_left_L(int *target_x, int *target_y, int value)
+{
+    int is_y = 1, is_x = 1;
+    if ((*target_x == 6) && (*target_y >= 0 || *target_y <= 6))
     {
-        if (strcmp(single_player->all_tokens[i].name_and_pos->name, selected_token_name) == 0)
+        int counter = 0;
+        while (counter != value)
         {
-            printf("inside the If conditon\n");
-            single_player->all_tokens[i].name_and_pos->x = target_x;
-            single_player->all_tokens[i].name_and_pos->y = target_y;
-            break;
+            if (is_y)
+                (*target_y)++;
+            if ((*target_y == 6) || ((*target_x) <= 6 || (*target_x >= 0)))
+            {
+                is_y = 1;
+                (*target_x)--;
+                if (*target_x == 0)
+                {
+                    is_y = 1;
+                }
+                if (*target_y == 8)
+                {
+                }
+            }
         }
     }
-    g_timeout_add(10, move_callback, positions);
-    printf("the selected token name is %s and the player name is %s ", selected_token_name, single_player->player_name);
+}
 
-    print_player_detail(single_player);
-    printf("this is after the movement\n");
+int check_break_point(int *current_x, int *current_y, int *target_x, int *target_y, int dice_value, struct player_data *single_player, char *selected_token_name)
+{
+    printf("int function\n");
+    *target_x = *current_x;
+    *target_y = *current_y;
+    printf("Initial Target coordinates: (%d, %d)\n", *target_x, *target_y);
+    int is_x = 1;
+    int is_y = 1;
+    for (int i = 0; i < 3; i++)
+    {
+        if (single_player->dice_value[i])
+        {
+            if (strcmp(single_player->player_name, "red") == 0)
+            {
+
+                if ((*current_x <= 14 && *current_x >= 8) && (*current_y == 6))
+                {
+
+                    int value = 0;
+                    while (value != single_player->dice_value[i])
+                    {
+                        if (is_x)
+                            (*target_x)--;
+
+                        if ((*target_x == 8) && (*current_y <= 0 || *current_y >= 6))
+                        {
+                            is_x = 0;
+                            (*target_y)--;
+                        }
+                        value++;
+                    }
+                    update_player_token(single_player, selected_token_name, *target_x, *target_y);
+                }
+
+                if ((*current_x == 8) && (*current_y >= 0 || *current_y <= 6))
+                {
+                    int value = 0;
+                    while (value != single_player->dice_value[i])
+                    {
+                        if (is_y)
+                            (*target_y)--;
+                        if (*target_y == 0)
+                        {
+                            is_y = 0;
+                            (*target_x)--;
+                            if (*target_x == 6)
+                            {
+                                top_left_L(target_x, target_y, single_player->dice_value[i]);
+                            }
+                        }
+                        value++;
+                    }
+                }
+            }
+            else if (strcmp(single_player->player_name, "blue") == 0)
+            {
+
+                if ((*current_y <= 6 && *current_y >= 0) && (*current_x == 6))
+                {
+
+                    int value = 0;
+                    while (value != single_player->dice_value[i])
+                    {
+                        if (is_y)
+                            (*target_y)++;
+
+                        if ((*target_y == 6) && (*current_x >= 0 && *current_x <= 6))
+                        {
+                            is_y = 0;
+                            (*target_x)--;
+                        }
+                        value++;
+                    }
+                }
+                if ((*current_y == 6) && (*current_x >= 0 || *current_x <= 6))
+                {
+                    int value = 0;
+                    while (value != single_player->dice_value[i])
+                    {
+                        if (is_x)
+                            (*target_x)--;
+                        if (*target_x == 0)
+                        {
+                            is_x = 0;
+                            (*target_x)--;
+                            if (*target_x == 0)
+                            {
+                                is_x = 0;
+                                // top_left_L(target_x, target_y, single_player->dice_value[i]);
+                            }
+                        }
+                        value++;
+                    }
+                }
+            }
+            else if (strcmp(single_player->player_name, "yellow") == 0)
+            {
+
+                if ((*current_x <= 6 && *current_x >= 0) && (*current_y == 8))
+                {
+                    printf("Falls in range |\n");
+                    int value = 0;
+                    while (value != single_player->dice_value[i])
+                    {
+                        if (is_x)
+                            (*target_x)++;
+
+                        if ((*target_x == 6) && (*current_y >= 8 && *current_x <= 14))
+                        {
+                            is_x = 0;
+                            (*target_y)++;
+                        }
+                        value++;
+                    }
+                }
+                if ((*current_x == 6) && (*current_y >= 8 || *current_y <= 14))
+                {
+                    int value = 0;
+                    while (value != single_player->dice_value[i])
+                    {
+                        if (is_y)
+                            (*target_y)++;
+                        if (*target_y == 14)
+                        {
+                            is_y = 0;
+                            (*target_x)++;
+                            if (*target_x == 8)
+                            {
+                                is_x = 0;
+                            }
+                        }
+                        value++;
+                    }
+                }
+            }
+            else if (strcmp(single_player->player_name, "green") == 0)
+            {
+
+                if ((*current_y <= 8 && *current_y >= 14) && (*current_x == 8))
+                {
+                    printf("Falls in range |\n");
+                    int value = 0;
+                    while (value != single_player->dice_value[i])
+                    {
+                        if (is_y)
+                            (*target_y)--;
+
+                        if ((*target_y == 8) && (*current_x >= 8 && *current_x <= 14))
+                        {
+                            is_y = 0;
+                            (*target_x)++;
+                        }
+                        value++;
+                    }
+                }
+                if ((*current_y == 8) && (*current_x >= 8 || *current_x <= 14))
+                {
+                    int value = 0;
+                    while (value != single_player->dice_value[i])
+                    {
+                        if (is_x)
+                            (*target_x)++;
+                        if (*target_x == 14)
+                        {
+                            is_x = 0;
+                            (*target_y)--;
+                            if (*target_y == 6)
+                            {
+                                is_x = 0;
+                            }
+                        }
+                        value++;
+                    }
+                }
+            }
+        }
+    }
+    return 0;
+}
+
+void movement_helper(struct player_data *single_player)
+{
+    GtkAllocation allocation;
+    int selected_button_x;
+    int selected_button_y;
+    int target_x;
+    int target_y;
+    size_t size = 0;
+    struct token *moved_token = NULL;
+    char *player_name = concat_strings(single_player->player_name, " : select token to move");
+    int *positions = g_new(int, 4);
+    g_idle_add((GSourceFunc)update_label, player_name);
+    char *selected_token_name = returned_token(single_player); // Asking user to select the token for movement
+
+    if (!selected_token_name)
+    {
+        char *message = concat_strings(single_player->player_name, " : select some token");
+        g_idle_add((GSourceFunc)update_label, message);
+    }
+    else
+    {
+        gtk_widget_get_allocation(selected_button, &allocation);
+        selected_button_x = allocation.y / cell_size;
+        selected_button_y = allocation.x / cell_size;
+
+        int is_selected_in_home = selected_token_in_home(selected_button_x, selected_button_y, single_player);
+        while (is_selected_in_home)
+        {
+            g_idle_add((GSourceFunc)update_label, "select token which is not in home");
+            selected_token_name = returned_token(single_player);
+            gtk_widget_get_allocation(selected_button, &allocation);
+            selected_button_x = allocation.y / cell_size;
+            selected_button_y = allocation.x / cell_size;
+            is_selected_in_home = selected_token_in_home(selected_button_x, selected_button_y, single_player);
+        }
+
+        char *message = concat_strings(single_player->player_name, " : doing movement");
+        g_idle_add((GSourceFunc)update_label, message);
+        target_x = selected_button_x;
+        target_y = selected_button_y;
+        positions[0] = selected_button_x;
+        positions[1] = selected_button_y;
+        printf("positions[0] = %d\n", positions[0]);
+        printf("positions[1] = %d\n", positions[1]);
+        for (int i = 0; i < 3; i++)
+        {
+            if (single_player->dice_value[i])
+            {
+                int counter = 0;
+                while (counter != single_player->dice_value[i])
+                {
+                    // Check the player and move the token accordingly
+                    if (strcmp(single_player->player_name, "red") == 0)
+                    {
+                        check_break_point(&selected_button_x, &selected_button_y, &target_x, &target_y, single_player->dice_value[i], single_player, selected_token_name);
+                        positions[2] = target_x;
+                        positions[3] = target_y;
+                        g_timeout_add(10, move_callback, positions);
+                    }
+                    else if (strcmp(single_player->player_name, "blue") == 0)
+                    {
+                        check_break_point(&selected_button_x, &selected_button_y, &target_x, &target_y, single_player->dice_value[i], single_player, selected_token_name);
+                        positions[2] = target_x;
+                        positions[3] = target_y;
+                        g_timeout_add(10, move_callback, positions);
+                    }
+                    else if (strcmp(single_player->player_name, "yellow") == 0)
+                    {
+                        check_break_point(&selected_button_x, &selected_button_y, &target_x, &target_y, single_player->dice_value[i], single_player, selected_token_name);
+                        positions[2] = target_x;
+                        positions[3] = target_y;
+                        g_timeout_add(10, move_callback, positions);
+                    }
+                    else if (strcmp(single_player->player_name, "green") == 0)
+                    {
+                        check_break_point(&selected_button_x, &selected_button_y, &target_x, &target_y, single_player->dice_value[i], single_player, selected_token_name);
+                        positions[2] = target_x;
+                        positions[3] = target_y;
+                        g_timeout_add(10, move_callback, positions);
+                    }
+                    else
+                    {
+                        printf("Error: Invalid player name '%s'\n", single_player->player_name);
+                    }
+                
+                    update_player_token(single_player, selected_token_name, target_x, target_y);
+                    counter++;
+                }
+            }
+        }
+
+        printf("Initial target_x: %d, target_y: %d\n", target_x, target_y);
+        for (int i = 0; i < 3; i++)
+        {
+            single_player->dice_value[i] = 0;
+        }
+        
+    }
 }
 
 int do_movement(struct player_data *single_player, gchar *selected_token_name)
@@ -510,45 +913,67 @@ int do_movement(struct player_data *single_player, gchar *selected_token_name)
     GtkAllocation allocation;
     int selected_button_x;
     int selected_button_y;
+    int is_for_home = 0; // variable to see if we are doing movement for home or not
     if (selected_button)
     {
-        gtk_widget_get_allocation(selected_button, &allocation);
+        gtk_widget_get_allocation(selected_button, &allocation); // get the x , y of the selected button
         selected_button_x = allocation.y / cell_size;
         selected_button_y = allocation.x / cell_size;
-        int is_selected_in_home = selected_token_in_home(selected_button_x, selected_button_y, single_player);
-        while (is_selected_in_home)
+        int is_selected_in_home = selected_token_in_home(selected_button_x, selected_button_y, single_player); // check if the selected button is in home
+        while (is_selected_in_home)                                                                            // while selected button is in home
         {
-            printf("in loop\n");
-            if (single_player->dice_value[0] == 6)
+
+            if (single_player->dice_value[0] == 6) // check if the first value of dice is 6
             {
-                printf("moving the button to start postion\n");
+                single_player->dice_value[0] = 0;
+                is_for_home = 1; // showing that we are doing the movement for the home position
                 if (strcmp(single_player->player_name, "blue") == 0)
                 {
-                    move(selected_button_x, selected_button_y, 6, 1, selected_token_name, single_player);
+                    move(selected_button_x, selected_button_y, 6, 1, selected_token_name, single_player); // place the token at home position
+                    movement_helper(single_player);
                 }
                 else if (strcmp(single_player->player_name, "red") == 0)
                 {
                     move(selected_button_x, selected_button_y, 13, 6, selected_token_name, single_player);
+                    movement_helper(single_player);
                 }
                 else if (strcmp(single_player->player_name, "green") == 0)
                 {
                     move(selected_button_x, selected_button_y, 8, 13, selected_token_name, single_player);
+                    movement_helper(single_player);
                 }
                 else if (strcmp(single_player->player_name, "yellow") == 0)
                 {
                     move(selected_button_x, selected_button_y, 1, 8, selected_token_name, single_player);
+                    movement_helper(single_player);
                 }
+
                 break;
             }
-            else
-            {
-                g_idle_add((GSourceFunc)update_label, "select different token"); // ask user to select the different token
-                char *selected_token_name = returned_token(single_player);
-                is_selected_in_home = selected_token_in_home(selected_button_x, selected_button_y, single_player);
-            }
+            printf("---------------------------------------\n");
+            g_idle_add((GSourceFunc)update_label, "select token not in home"); // ask user to select the different token
+            selected_token_name = returned_token(single_player);
+            gtk_widget_get_allocation(selected_button, &allocation); // get the x , y of the selected button
+            selected_button_x = allocation.y / cell_size;
+            selected_button_y = allocation.x / cell_size;
+            printf("the selected button is %s", selected_token_name);
+            is_selected_in_home = selected_token_in_home(selected_button_x, selected_button_y, single_player); // again select the token and go in loop
+            printf("Selected button coordinates:\n");
+            printf("X: %d\n", selected_button_x);
+            printf("Y: %d\n", selected_button_y);
+            printf("%d ", is_selected_in_home);
+
+            printf("---------------------------------------\n");
         }
-        printf("there is a button which is not in home postion and we are doing it's movement\n");
-        sleep(3);
+        if (!is_for_home) // if selected button is not in home perform normal movement
+        {
+
+            printf("\n");
+            print_player_detail(single_player);
+            printf("\n");
+            printf("there is a button which is not in home postion and we are doing it's movement\n");
+            movement_helper(single_player);
+        }
     }
     else
     {
@@ -581,7 +1006,8 @@ void *check_token_selection(void *arg)
     {
         if (single_player->dice_value[0] < 6) // check the dice value if < 6 ask user to get 6 in order to unlock
         {
-            g_idle_add((GSourceFunc)update_label, "Get 6 to unlock token");
+            char *message = concat_strings(single_player->player_name, " : Get 6 to unlock token");
+            g_idle_add((GSourceFunc)update_label, message);
             *done_with_movement = 0;
             return (void *)done_with_movement; // next player turn
         }
@@ -593,12 +1019,6 @@ void *check_token_selection(void *arg)
 
             if (selected_token_name)
             {
-
-                /*
-                all button are in home and player got the 6
-                after getting 6 player chose the token
-                now we move that token according to dice value
-                */
                 do_movement(single_player, selected_token_name);
                 *done_with_movement = 1;
                 g_free(selected_token_name);
@@ -608,14 +1028,11 @@ void *check_token_selection(void *arg)
     }
     else // if all token are not in home
     {
-        g_idle_add((GSourceFunc)update_label, "Select a token");   // ask user to select the token
+        char *message = concat_strings(single_player->player_name, " : Select a token");
+        g_idle_add((GSourceFunc)update_label, message);            // ask user to select the token
         char *selected_token_name = returned_token(single_player); // get the selected token
         do_movement(single_player, selected_token_name);           // send the selected token in movement fucntion
         g_idle_add((GSourceFunc)update_label, "Player doing the movement");
-        printf("Player Name: %s\n", single_player->player_name);
-        printf("Dice Values: %d, %d, %d\n", single_player->dice_value[0], single_player->dice_value[1], single_player->dice_value[2]);
-        printf("Can Go Home: %s\n", single_player->can_go_home ? "Yes" : "No");
-
         *done_with_movement = 1; // done with movement return
         g_idle_add((GSourceFunc)update_label, "Next player's turn");
     }
@@ -627,35 +1044,37 @@ void get_player_dice_value(struct player_data *single_player)
 {
     int single_player_dice_value = get_dice_value();
     pthread_mutex_lock(&dice_mutex);
-    printf("The dice is locked by the player name %s\n", single_player->player_name);
-    printf("The value of dice is %d\n", single_player_dice_value);
+    printf("\nThe dice is locked by the player name %s\n", single_player->player_name);
+
     single_player->dice_value[0] = single_player_dice_value;
     g_idle_add((GSourceFunc)update_label, single_player->player_name);
 
     if (single_player_dice_value == 6)
     {
         int counter = 1;
-        g_idle_add((GSourceFunc)update_label, "Roll again\n");
+        char *message = concat_strings(single_player->player_name, " : Roll again");
+        g_idle_add((GSourceFunc)update_label, message);
         printf("Player %s rolled a 6. Rolling again...\n", single_player->player_name);
         single_player_dice_value = get_again_rolled_dice_value();
         single_player->dice_value[1] = single_player_dice_value;
-
+        printf("The Six counter value is %d\n", counter);
         while (single_player_dice_value == 6)
         {
+            printf("The Six counter value is %d\n", counter);
             counter++;
-            single_player_dice_value = get_again_rolled_dice_value();
-            single_player->dice_value[2] = single_player_dice_value;
             if (counter == 3)
             {
+                g_idle_add((GSourceFunc)update_label, "You got three consecutive 6's, moving to next player");
                 break;
             }
+            single_player_dice_value = get_again_rolled_dice_value();
+            single_player->dice_value[2] = single_player_dice_value;
         }
 
         printf("Player %s rolled again and got %d\n", single_player->player_name, single_player_dice_value);
     }
 
     pthread_t movement_thread;
-    printf("calling thread\n");
     pthread_create(&movement_thread, NULL, check_token_selection, (void *)single_player);
     int *done_with_movement;
     pthread_join(movement_thread, (void **)&done_with_movement);
@@ -699,8 +1118,6 @@ void make_player_thread(struct player_data *player_array, size_t size)
 
 void initialize_player(int number_of_player)
 {
-    printf("in fucntion\n");
-
     struct token all_tokens[4][4] = {
         {
             {&token1_red_name_pos, "red"},
@@ -819,6 +1236,7 @@ GtkWidget *make_grid()
 
             const char *start_color = NULL;
             int is_token_position = 0;
+
             for (int k = 0; k < num_tokens; k++)
             {
                 if (i == tokens[k].x && j == tokens[k].y)
@@ -993,5 +1411,16 @@ void assign_color(GtkStyleContext *context, int i, int j)
             gtk_style_context_add_class(context, "transparent-inner");
         else
             gtk_style_context_add_class(context, "bottom-right");
+    }
+    if ((i == 6 && j == 6) ||
+        (i == 7 && j == 6) ||
+        (i == 8 && j == 6) ||
+        (i == 8 && j == 8) ||
+        (i == 7 && j == 8) ||
+        (i == 6 && j == 8) ||
+        (i == 6 && j == 7) ||
+        (i == 8 && j == 7))
+    {
+        gtk_style_context_add_class(context, "win");
     }
 }

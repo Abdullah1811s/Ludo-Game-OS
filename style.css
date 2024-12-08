@@ -102,3 +102,13 @@ button {
     padding: 8px 16px;
     margin: 5px;
 }
+
+.win {
+    background-color: #b8498c;
+    border-color: #b8498c;
+    color: white;
+    background-image: none;
+    box-shadow: none;
+    border-radius: 0px;
+    font-weight: bold;
+}
